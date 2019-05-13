@@ -269,5 +269,5 @@ class Maxout():
 
         self.network = self.load_network('model_instances/maxout.pkl')
         if self.verbose:
-            print 'best val loss: {}'.format(best_val_loss)
+            print('best val loss: {}'.format(best_val_loss))
         return self.predict_proba(val_X)
