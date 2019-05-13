@@ -4,14 +4,12 @@ TODO: Track Uncertainty
 - potentially bias training based on most uncertain examples until an equilibrium is found
 """
 
-import lime
 import sys
 import h5py
 import pandas as pd
-import cPickle as pickle
+import pickle
 from sklearn.svm import SVC
 from sklearn.metrics import *
-from sklearn.cross_validation import KFold
 
 import theano
 theano.config.floatX = 'float32'
@@ -24,8 +22,8 @@ import os, sys
 import click
 import copy
 
-from lasagne.layers import FeaturePoolLayer, batch_norm
-from lasagne.nonlinearities import softmax, linear, sigmoid, elu
+from lasagne.layers import FeaturePoolLayer
+from lasagne.nonlinearities import softmax, linear, sigmoid
 from lasagne.objectives import aggregate, categorical_crossentropy
 from lasagne.init import HeNormal
 from lasagne.init import Glorot, Normal
@@ -37,14 +35,24 @@ from random import randint
 class Maxout():
     """ Maxout Network """
 
-    def __init__(self, num_features, num_layers, num_nodes, dropout_rate, learning_rate, weight_decay, verbose=False):
+    def __init__(
+            self,
+            num_features,
+            *,
+            num_layers=2,
+            num_nodes=None,
+            dropout_rate=0.1,
+            learning_rate=9e-3,
+            weight_decay=1e-4,
+            verbose=False,
+    ) -> None:
         self.verbose = verbose
         self.input_var = T.matrix('inputs')
         self.target_var = T.ivector('targets')
 
         self.num_features = num_features
         self.num_layers = num_layers
-        self.num_nodes = num_nodes
+        self.num_nodes = num_nodes if num_nodes else num_features * 20
         self.dropout = dropout_rate
         self.network = self.build_network()
 
@@ -110,7 +118,7 @@ class Maxout():
         network = lasagne.layers.InputLayer(shape=(None, self.num_features),
                                             input_var=self.input_var)
         network = lasagne.layers.DropoutLayer(network, p=self.dropout)
-        for _ in xrange(0, self.num_layers):
+        for _ in range(0, self.num_layers):
             network = self.add_maxout_layer(network, self.num_nodes)
         return lasagne.layers.DenseLayer(network, num_units=2,nonlinearity=softmax)
 
@@ -136,7 +144,7 @@ class Maxout():
         preds = []
         for x in X:
             samples = []
-            for _ in xrange(100):
+            for _ in range(100):
                 samples.append(self.bayes_predict([x])[0][1])
             preds.append(np.mean(samples))
         return preds
@@ -151,7 +159,7 @@ class Maxout():
             mc_iters = 20
             sampled_acc = 0.0
             sampled_loss = 0.0
-            for _ in xrange(mc_iters):
+            for _ in range(mc_iters):
                 err, acc = self.bayes_test(inputs, targets)
                 sampled_acc += acc
                 sampled_loss += err
@@ -197,7 +205,7 @@ class Maxout():
         """
         X_tmp = np.copy(X)
         y_tmp = np.copy(y)
-        for cycle in xrange(0, num_cycles+1):
+        for cycle in range(0, num_cycles+1):
             X_new = np.copy(X_tmp)
             for i, row in enumerate(X_new):
                 for j, col in enumerate(X_new[i]):
@@ -209,8 +217,17 @@ class Maxout():
         return X, y
 
 
-    def fit(self, train_X, train_y, val_X, val_y, features, batch_size=10,
-                                    num_epochs=99999, early_stop_rounds=3):
+    def fit(
+        self,
+        train_X,
+        train_y,
+        val_X,
+        val_y,
+        *,
+        batch_size=1,
+        num_epochs=99999,
+        early_stop_rounds=5
+    ):
         """ Train Maxout Network
 
         Returns list of predictions for test_X
@@ -234,9 +251,9 @@ class Maxout():
             train_batches = 0
             start_time = time.time()
 
-            train_X, train_y = self.mixup(X=X, y=y, rep_ratio=0.1, num_cycles=1)
-            train_X = np.array(train_X, dtype=np.float32)
-            train_y = np.array(train_y, dtype=np.int32)
+            #train_X, train_y = self.mixup(X=X, y=y, rep_ratio=0.1, num_cycles=1)
+            #train_X = np.array(train_X, dtype=np.float32)
+            #train_y = np.array(train_y, dtype=np.int32)
 
             for batch in self.iterate_minibatches(train_X, train_y, batch_size, shuffle=True):
                 inputs, targets = batch
@@ -269,5 +286,8 @@ class Maxout():
 
         self.network = self.load_network('model_instances/maxout.pkl')
         if self.verbose:
-            print 'best val loss: {}'.format(best_val_loss)
+            print('best val loss: {}'.format(best_val_loss))
         return self.predict_proba(val_X)
+
+    def score(self, X, y):
+        return 
