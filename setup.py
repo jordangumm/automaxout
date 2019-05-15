@@ -9,5 +9,5 @@ setup(name='automaxout',
       description='Library for automatic training of Maxout Networks.',
       author='Jordan Gumm',
       author_email='jordan@variantanalytics.com',
-      packages=['automaxout']
+      packages=['automaxout', 'automaxout.models']
 )
