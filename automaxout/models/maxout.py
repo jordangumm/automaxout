@@ -4,14 +4,11 @@ TODO: Track Uncertainty
 - potentially bias training based on most uncertain examples until an equilibrium is found
 """
 
-import lime
 import sys
-import h5py
 import pandas as pd
-import cPickle as pickle
-from sklearn.svm import SVC
+import pickle
+
 from sklearn.metrics import *
-from sklearn.cross_validation import KFold
 
 import theano
 theano.config.floatX = 'float32'
@@ -24,8 +21,8 @@ import os, sys
 import click
 import copy
 
-from lasagne.layers import FeaturePoolLayer, batch_norm
-from lasagne.nonlinearities import softmax, linear, sigmoid, elu
+from lasagne.layers import FeaturePoolLayer
+from lasagne.nonlinearities import softmax, linear, sigmoid
 from lasagne.objectives import aggregate, categorical_crossentropy
 from lasagne.init import HeNormal
 from lasagne.init import Glorot, Normal
