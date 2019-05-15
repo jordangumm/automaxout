@@ -107,7 +107,7 @@ class Maxout():
         network = lasagne.layers.InputLayer(shape=(None, self.num_features),
                                             input_var=self.input_var)
         network = lasagne.layers.DropoutLayer(network, p=self.dropout)
-        for _ in xrange(0, self.num_layers):
+        for _ in range(0, self.num_layers):
             network = self.add_maxout_layer(network, self.num_nodes)
         return lasagne.layers.DenseLayer(network, num_units=2,nonlinearity=softmax)
 
@@ -133,7 +133,7 @@ class Maxout():
         preds = []
         for x in X:
             samples = []
-            for _ in xrange(100):
+            for _ in range(100):
                 samples.append(self.bayes_predict([x])[0][1])
             preds.append(np.mean(samples))
         return preds
@@ -148,7 +148,7 @@ class Maxout():
             mc_iters = 20
             sampled_acc = 0.0
             sampled_loss = 0.0
-            for _ in xrange(mc_iters):
+            for _ in range(mc_iters):
                 err, acc = self.bayes_test(inputs, targets)
                 sampled_acc += acc
                 sampled_loss += err
@@ -194,7 +194,7 @@ class Maxout():
         """
         X_tmp = np.copy(X)
         y_tmp = np.copy(y)
-        for cycle in xrange(0, num_cycles+1):
+        for cycle in range(0, num_cycles+1):
             X_new = np.copy(X_tmp)
             for i, row in enumerate(X_new):
                 for j, col in enumerate(X_new[i]):
