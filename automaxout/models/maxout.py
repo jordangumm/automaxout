@@ -206,11 +206,21 @@ class Maxout():
         return X, y
 
 
-    def fit(self, train_X, train_y, val_X, val_y, features, batch_size=10,
-                                    num_epochs=99999, early_stop_rounds=3):
-        """ Train Maxout Network
+    def fit(
+        self,
+        train_X,
+        train_y,
+        val_X,
+        val_y,
+        *,
+        batch_size=50,
+        num_epochs=99999,
+        early_stop_rounds=3
+    ):
+        """Train Maxout Network.
 
         Returns list of predictions for test_X
+
         """
         season_evals = []
 
@@ -268,3 +278,6 @@ class Maxout():
         if self.verbose:
             print('best val loss: {}'.format(best_val_loss))
         return self.predict_proba(val_X)
+
+    def score(self, X, y):
+        return
