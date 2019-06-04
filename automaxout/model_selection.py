@@ -7,13 +7,13 @@ from typing import Any, Callable
 import click
 import pandas as pd
 
-from deap  import base, creator
-from deap  import tools
-from deap  import algorithms
-from numpy import mean
+from deap            import algorithms, base, creator
+from deap.tools      import cxUniform, initCycle, initRepeat, selTournament
+from numpy           import mean
+from sklearn.metrics import log_loss
 
 
-def random_node_count(self, low: int, high: int) -> int:
+def random_node_count(low: int, high: int) -> int:
     """Select random node count divisible by pool size.
 
     Number of nodes must be divisible by pool size.
@@ -37,6 +37,9 @@ def random_node_count(self, low: int, high: int) -> int:
 class GeneticSelector():
     """Evolutionary Model Selection.
 
+    Based on DEAP generational algorithm example.
+    https://deap.readthedocs.io/en/master/overview.html
+
     Attributes:
         maxout:      class of Maxout architecture to train
         X:           example features
@@ -52,15 +55,18 @@ class GeneticSelector():
     """
     def __init__(
             self,
-            maxout:      Callable[Any, Any],
+            maxout:      Callable[[Any], Any],
             X:           pd.DataFrame,
             y:           pd.DataFrame,
+            *,
             node_min:    int,
             node_max:    int,
             layer_min:   int,
             layer_max:   int,
             dropout_min: float,
             dropout_max: float,
+            stop_min:    int,
+            stop_max:    int,
             ngen:        int,
     ) -> None:
         """Initialize EvolveSelector.
@@ -81,16 +87,17 @@ class GeneticSelector():
         self.maxout      = maxout
         self.X           = X
         self.y           = y
-        *,
         self.node_min    = node_min
         self.node_max    = node_max
         self.layer_min   = layer_min
         self.layer_max   = layer_max
         self.dropout_min = dropout_min
         self.dropout_max = dropout_max
+        self.stop_min    = stop_min
+        self.stop_max    = stop_max
         self.ngen        = ngen
 
-    def evaluate(self, indi):
+    def evaluate(self, indi: Sequence[Union[int, float]]):
         """Evaluate individual.
 
         Args:
@@ -104,15 +111,17 @@ class GeneticSelector():
         
         """
         probs = self.maxout(
+            num_features = len(self.X[0]),
             num_layers=indi[0],
             num_nodes=indi[1],
-            dropout_p=indi[2],
+            dropout_rate=indi[2],
+            early_stop=indi[3],
         ).fit(self.X, self.y, self.X, self.y)  # TODO set validation data sets with boosting
 
         score = log_loss(self.y, probs)  # TODO base score on validation
 
         print(indi, '\tscore: ', score)
-        return score
+        return (score,)
 
     def random_mutation(self, indi):
         """Mutate an individual by replacing attributes.
@@ -137,7 +146,7 @@ class GeneticSelector():
 
         # randomly reset early stopping on coin flip
         if random.randint(0, 1):
-            indi[3] = random.randint(1, 3)  # TODO add as arguments
+            indi[3] = random.randint(self.stop_min, self.stop_max)  # TODO add as arguments
 
         return indi
 
@@ -160,31 +169,38 @@ class GeneticSelector():
             if inds[index] not in best:
                 best.append(individuals[index])
                 best_added += 1
-            print '{}: {}'.format(inds[index], scores[index])
+            print('{}: {}'.format(inds[index], scores[index]))
             del inds[index]
             if best_added == k:
                 break
         return best
 
     def get_toolbox(self):
-        num_layer_min, num_layer_max = 1, 2
-        num_nodes_min, num_nodes_max = 2, 100
-        dropout_min, dropout_max = 0.0, 0.5
-
         creator.create("FitnessMin", base.Fitness, weights=(-1.0,))
         creator.create("Individual", list, fitness=creator.FitnessMin)
 
         toolbox = base.Toolbox()
-        toolbox.register("num_layers", random.randint, num_layer_min, num_layer_max)
-        toolbox.register("num_nodes", self.get_random_numnodes_for_poolsize, num_nodes_min, num_nodes_max)
-        toolbox.register("dropout_p", random.uniform, dropout_min, dropout_max)
-        toolbox.register("early_stop", random.randint, 1, 3)  # TODO add as argument
-        toolbox.register("individual", tools.initCycle, creator.Individual,
-                    (toolbox.num_layers, toolbox.num_nodes, toolbox.dropout_p), n=1)
+        toolbox.register("num_layers", random.randint, self.layer_min, self.layer_max)
+        toolbox.register("num_nodes", random_node_count, self, self.node_min, self.node_max)
+        toolbox.register("dropout_p", random.uniform, self.dropout_min, self.dropout_max)
+        toolbox.register("early_stop", random.randint, self.stop_min, self.stop_max)
 
-        toolbox.register("population", tools.initRepeat, list, toolbox.individual)
+        toolbox.register(
+            "individual",
+            initCycle,
+            creator.Individual,
+            (
+                toolbox.num_layers,
+                toolbox.num_nodes,
+                toolbox.dropout_p,
+                toolbox.early_stop,
+            ),
+            n=1
+        )
 
-        toolbox.register("mate", tools.cxUniform)
+        toolbox.register("population", initRepeat, list, toolbox.individual)
+
+        toolbox.register("mate", cxUniform)
         toolbox.register("mutate", self.random_mutation)
         toolbox.register("select", selTournament, tournsize=3)
         toolbox.register("evaluate", self.evaluate)
@@ -205,7 +221,7 @@ class GeneticSelector():
             # select the next generation of individuals
             offspring = toolbox.select(pop, len(pop))
             # clone the selected individuals
-            offspring = map(toolbox.clone, offspring)
+            offspring = list(map(toolbox.clone, offspring))
 
             # apply crossover and mutation on the offspring
             for child1, child2 in zip(offspring[::2], offspring[1::2]):
@@ -222,13 +238,14 @@ class GeneticSelector():
             # evaluate the individuals with an invalid fitness
             invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
             fitnesses = map(toolbox.evaluate, invalid_ind)
+
             for ind, fit in zip(invalid_ind, fitnesses):
                 ind.fitness.values = fit
 
             # the population is entirely replaced by the offspring
             pop[:] = offspring
         best = toolbox.select(pop, 1)[0]
-        print 'best: {}'.format(mean(best.fitness.values))
+        print('best: {}'.format(mean(best.fitness.values)))
 
 
 @click.command()

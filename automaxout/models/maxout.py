@@ -34,7 +34,15 @@ from random import randint
 class Maxout():
     """ Maxout Network """
 
-    def __init__(self, num_features, num_layers, num_nodes, dropout_rate, learning_rate, weight_decay, verbose=False):
+    def __init__(
+        self,
+        num_features: int,
+        num_layers:   int,
+        num_nodes:    int,
+        dropout_rate: float,
+        early_stop:   int, 
+        verbose:      bool = False,
+    ) -> None:
         self.verbose = verbose
         self.input_var = T.matrix('inputs')
         self.target_var = T.ivector('targets')
@@ -43,12 +51,18 @@ class Maxout():
         self.num_layers = num_layers
         self.num_nodes = num_nodes
         self.dropout = dropout_rate
+        self.early_stop = early_stop
         self.network = self.build_network()
 
-        self.prediction = lasagne.layers.get_output(self.network,
-                                               deterministic=True)
-        self.predict_function = theano.function([self.input_var], self.prediction,
-                                                        allow_input_downcast=True)
+        self.prediction = lasagne.layers.get_output(
+                self.network,
+                deterministic=True
+        )
+        self.predict_function = theano.function(
+                [self.input_var],
+                self.prediction,
+                allow_input_downcast=True
+        )
 
         self.loss = categorical_crossentropy(self.prediction, self.target_var)
         self.loss = aggregate(self.loss, mode='mean')
@@ -56,26 +70,24 @@ class Maxout():
         if not os.path.exists('model_instances'):
             os.mkdir('model_instances')
 
-        # L2 regularization with weight decay
-        weightsl2 = lasagne.regularization.regularize_network_params(self.network,
-                                                    lasagne.regularization.l2)
-        weightsl1 = lasagne.regularization.regularize_network_params(self.network,
-                                                    lasagne.regularization.l1)
-        #self.loss += weight_decay*weightsl2 #+ 1e-5*weightsl1
+        weightsl2 = lasagne.regularization.regularize_network_params(
+                self.network,
+                lasagne.regularization.l2
+        )
+        weightsl1 = lasagne.regularization.regularize_network_params(
+                self.network,
+                lasagne.regularization.l1
+        )
 
         # ADAM training
         params = lasagne.layers.get_all_params(self.network, trainable=True)
-        updates = lasagne.updates.adagrad(self.loss, params, learning_rate=learning_rate)
-        #updates = lasagne.updates.adam(self.loss, params)
-        #updates = lasagne.updates.nesterov_momentum(self.loss, params,
-        #                learning_rate=learning_rate, momentum=momentum)
+        updates = lasagne.updates.adam(self.loss, params)
 
         self.train = theano.function([self.input_var, self.target_var],
                                             self.loss, updates=updates)
 
         self.create_test_function()
         self.create_bayes_test_function()
-
 
     def create_test_function(self):
         """ Create Test Function
@@ -84,7 +96,6 @@ class Maxout():
         test_loss = categorical_crossentropy(test_prediction, self.target_var).mean()
         test_acc = T.mean(T.eq(T.argmax(test_prediction, axis=1), self.target_var), dtype=theano.config.floatX)
         self.test = theano.function([self.input_var, self.target_var],[test_loss, test_acc])
-
 
     def create_bayes_test_function(self):
         """ Create Bayes Test Function
@@ -95,13 +106,11 @@ class Maxout():
         self.bayes_test = theano.function([self.input_var, self.target_var],[test_loss, test_acc])
         self.bayes_predict = theano.function([self.input_var], test_prediction, allow_input_downcast=True)
 
-
     def add_maxout_layer(self, network, num_nodes=240):
         network = lasagne.layers.DropoutLayer(network, p=self.dropout)
         network = lasagne.layers.DenseLayer(network, nonlinearity=None, num_units=num_nodes*2, W=Glorot(Normal))
         return lasagne.layers.FeaturePoolLayer(incoming=network, pool_size=2,
                                     axis=1, pool_function=theano.tensor.max)
-
 
     def build_network(self):
         network = lasagne.layers.InputLayer(shape=(None, self.num_features),
@@ -111,22 +120,18 @@ class Maxout():
             network = self.add_maxout_layer(network, self.num_nodes)
         return lasagne.layers.DenseLayer(network, num_units=2,nonlinearity=softmax)
 
-
     def save_network(self, model_fp):
         net_info = {'network': self.network, 'params': lasagne.layers.get_all_param_values(self.network)}
         pickle.dump(net_info, open(model_fp, 'wb'), protocol=pickle.HIGHEST_PROTOCOL)
-
 
     def load_network(self, model_fp):
         net = pickle.load(open(model_fp,'rb'))
         all_params = net['params']
         lasagne.layers.set_all_param_values(self.network, all_params)
 
-
     def predict_proba(self, X):
         """ Returns log loss of X """
         return self.predict_function(X)
-
 
     def predict_bayes_proba(self, X):
         """ Returns predictions over X """
@@ -137,7 +142,6 @@ class Maxout():
                 samples.append(self.bayes_predict([x])[0][1])
             preds.append(np.mean(samples))
         return preds
-
 
     def get_bayes_validation_metrics(self, test_X, test_y):
         """ Average non-deterministic feed forward passes from all examples """
@@ -158,7 +162,6 @@ class Maxout():
         val_loss = val_loss / len(test_y)
         return val_acc, val_loss
 
-
     def get_validation_metrics(self, test_X, test_y):
         """ Average deterministic feed forward batch passes """
         val_loss = 0.0
@@ -171,7 +174,6 @@ class Maxout():
         val_acc = val_acc / len(test_y)
         val_loss = val_loss / len(test_y)
         return val_acc, val_loss
-
 
     def iterate_minibatches(self, inputs, targets, batchsize, shuffle=False):
         assert len(inputs) == len(targets)
@@ -205,7 +207,6 @@ class Maxout():
             y = np.append(y, y_tmp)
         return X, y
 
-
     def fit(
         self,
         train_X,
@@ -215,7 +216,6 @@ class Maxout():
         *,
         batch_size=50,
         num_epochs=99999,
-        early_stop_rounds=3
     ):
         """Train Maxout Network.
 
@@ -271,7 +271,7 @@ class Maxout():
                 #print("  bayes val accu:\t\t{:.6f}".format(bayes_val_acc))
 
             since_best += 1
-            if since_best > early_stop_rounds:
+            if since_best > self.early_stop:
                 break
 
         self.network = self.load_network('model_instances/maxout.pkl')
