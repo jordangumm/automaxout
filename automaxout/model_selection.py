@@ -2,7 +2,7 @@
 import random
 import sys
 
-from typing import Any, Callable
+from typing import Any, Callable, Union, Sequence
 
 import click
 import pandas as pd
@@ -181,7 +181,7 @@ class GeneticSelector():
 
         toolbox = base.Toolbox()
         toolbox.register("num_layers", random.randint, self.layer_min, self.layer_max)
-        toolbox.register("num_nodes", random_node_count, self, self.node_min, self.node_max)
+        toolbox.register("num_nodes", random_node_count, self.node_min, self.node_max)
         toolbox.register("dropout_p", random.uniform, self.dropout_min, self.dropout_max)
         toolbox.register("early_stop", random.randint, self.stop_min, self.stop_max)
 
