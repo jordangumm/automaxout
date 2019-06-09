@@ -241,9 +241,9 @@ class Maxout():
             train_batches = 0
             start_time = time.time()
 
-            train_X, train_y = self.mixup(X=X, y=y, rep_ratio=0.1, num_cycles=1)
-            train_X = np.array(train_X, dtype=np.float32)
-            train_y = np.array(train_y, dtype=np.int32)
+            #train_X, train_y = self.mixup(X=X, y=y, rep_ratio=0.1, num_cycles=1)
+            #train_X = np.array(train_X, dtype=np.float32)
+            #train_y = np.array(train_y, dtype=np.int32)
 
             for batch in self.iterate_minibatches(train_X, train_y, batch_size, shuffle=True):
                 inputs, targets = batch
