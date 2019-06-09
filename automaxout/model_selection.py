@@ -7,10 +7,11 @@ from typing import Any, Callable, Union, Sequence
 import click
 import pandas as pd
 
-from deap            import algorithms, base, creator
-from deap.tools      import cxUniform, initCycle, initRepeat, selTournament
-from numpy           import mean
-from sklearn.metrics import log_loss
+from deap                    import algorithms, base, creator
+from deap.tools              import cxUniform, initCycle, initRepeat, selTournament
+from numpy                   import mean
+from sklearn.metrics         import log_loss
+from sklearn.model_selection import StratifiedKFold
 
 
 def random_node_count(low: int, high: int) -> int:
@@ -105,22 +106,31 @@ class GeneticSelector():
 
         Returns:
             Log loss score.
-
-        TODO:
-            Integrate boosting-based evaluation.
         
         """
-        probs = self.maxout(
-            num_features = len(self.X[0]),
-            num_layers=indi[0],
-            num_nodes=indi[1],
-            dropout_rate=indi[2],
-            early_stop=indi[3],
-        ).fit(self.X, self.y, self.X, self.y)  # TODO set validation data sets with boosting
+        # Cross Validation
+        skf = StratifiedKFold(n_split=10)
+        skf.get_n_splits(self.X, self.y)
 
-        score = log_loss(self.y, probs)  # TODO base score on validation
+        scores = []
+        for train_index, test_index in skf.split(self.X, self.y):
+            X_train, X_test = self.X[train_index], self.X[test_index]
+            y_train, y_test = self.y[train_index], self.y[test_index]
 
-        print(indi, '\tscore: ', score)
+            probs = self.maxout(
+                num_features = len(self.X[0]),
+                num_layers=indi[0],
+                num_nodes=indi[1],
+                dropout_rate=indi[2],
+                early_stop=indi[3],
+                verbose=True,
+            ).fit(X_train, y_train, X_test, y_test)  # TODO set validation data sets with boosting
+
+            scores.append(log_loss(self.y, probs))  # TODO base score on validation
+
+        score = sum(scores) / len(scores)
+
+        print(indi, '\tavg score: ', score)
         return (score,)
 
     def random_mutation(self, indi):

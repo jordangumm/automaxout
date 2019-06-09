@@ -214,7 +214,7 @@ class Maxout():
         val_X,
         val_y,
         *,
-        batch_size=50,
+        batch_size=200,
         num_epochs=99999,
     ):
         """Train Maxout Network.
