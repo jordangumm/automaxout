@@ -12,6 +12,7 @@ from deap.tools              import cxUniform, initCycle, initRepeat, selTournam
 from numpy                   import mean
 from sklearn.metrics         import log_loss
 from sklearn.model_selection import StratifiedKFold
+from sklearn.utils           import resample
 
 
 def random_node_count(low: int, high: int) -> int:
@@ -30,7 +31,7 @@ def random_node_count(low: int, high: int) -> int:
 
     """
     num = random.randint(low, high)
-    while (num/2) % 2 or num % 2:
+    while not (num/2) % 2 and not num % 2:
         num = random.randint(low, high)
     return num
 
@@ -109,13 +110,15 @@ class GeneticSelector():
         
         """
         # Cross Validation
-        skf = StratifiedKFold(n_split=10)
+        skf = StratifiedKFold(n_splits=10)
         skf.get_n_splits(self.X, self.y)
 
         scores = []
         for train_index, test_index in skf.split(self.X, self.y):
             X_train, X_test = self.X[train_index], self.X[test_index]
             y_train, y_test = self.y[train_index], self.y[test_index]
+            
+            X_val, y_val = resample(X_train, y_train)
 
             probs = self.maxout(
                 num_features = len(self.X[0]),
@@ -123,10 +126,10 @@ class GeneticSelector():
                 num_nodes=indi[1],
                 dropout_rate=indi[2],
                 early_stop=indi[3],
-                verbose=True,
-            ).fit(X_train, y_train, X_test, y_test)  # TODO set validation data sets with boosting
+                verbose=False,
+            ).fit(X_train, y_train, X_val, y_val, X_test)  # TODO set validation data sets with boosting
 
-            scores.append(log_loss(self.y, probs))  # TODO base score on validation
+            scores.append(log_loss(y_test, probs))  # TODO base score on validation
 
         score = sum(scores) / len(scores)
 
@@ -142,17 +145,17 @@ class GeneticSelector():
             indi: individual to mutate
             
         """
-        # randomly reset number of nodes on coin flip
-        if random.randint(0, 1):
-            indi[0] = random_node_count(self.node_min, self.node_max)
-
         # randomly reset number of layers on coin flip
         if random.randint(0, 1):
-            indi[1] = random.randint(self.layer_min, self.layer_max)
+            indi[0] = random_node_count(self.layer_min, self.layer_max)
+
+        # randomly reset number of nodes on coin flip
+        if random.randint(0, 1):
+            indi[1] = random.randint(self.node_min, self.node_max)
 
         # randomly reset dropout on coin flip
         if random.randint(0, 1):
-            indi[2] = random.random(self.dropout_min, self.dropout_max)
+            indi[2] = random.uniform(self.dropout_min, self.dropout_max)
 
         # randomly reset early stopping on coin flip
         if random.randint(0, 1):
@@ -223,20 +226,23 @@ class GeneticSelector():
         pop = toolbox.population(n=10)
 
         # evaluate the entire population
+        print('generation 1')
         fitnesses = toolbox.map(toolbox.evaluate, pop)
         for ind, fit in zip(pop, fitnesses):
             ind.fitness.values = fit
 
+        # TODO write output
         for g in range(self.ngen):
-            # select the next generation of individuals
-            offspring = toolbox.select(pop, len(pop))
+            print('generation', g+2)
+            best = toolbox.select(pop, 1)
+            offspring = toolbox.population(n=4) + toolbox.select(pop, 5)
             # clone the selected individuals
             offspring = list(map(toolbox.clone, offspring))
 
             # apply crossover and mutation on the offspring
             for child1, child2 in zip(offspring[::2], offspring[1::2]):
                 if random.randint(0, 1):
-                    toolbox.mate(child1, child2)
+                    toolbox.mate(child1, child2, 0.5)
                     del child1.fitness.values
                     del child2.fitness.values
 
@@ -253,9 +259,10 @@ class GeneticSelector():
                 ind.fitness.values = fit
 
             # the population is entirely replaced by the offspring
-            pop[:] = offspring
+            pop[:] = offspring + best
         best = toolbox.select(pop, 1)[0]
-        print('best: {}'.format(mean(best.fitness.values)))
+        print('best:', best, best.fitness.values)
+        return best
 
 
 @click.command()

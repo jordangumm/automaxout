@@ -213,6 +213,7 @@ class Maxout():
         train_y,
         val_X,
         val_y,
+        test_X,
         *,
         batch_size=200,
         num_epochs=99999,
@@ -231,6 +232,7 @@ class Maxout():
         train_y = np.array(train_y, dtype=np.int32)
         val_X = np.array(val_X, dtype=np.float32)
         val_y = np.array(val_y, dtype=np.int32)
+        test_X = np.array(test_X, dtype=np.int32)
 
         best_val_loss = 1000.0
         since_best = 0 # for early stopping
@@ -277,7 +279,7 @@ class Maxout():
         self.network = self.load_network('model_instances/maxout.pkl')
         if self.verbose:
             print('best val loss: {}'.format(best_val_loss))
-        return self.predict_proba(val_X)
+        return self.predict_proba(test_X)
 
     def score(self, X, y):
         return
